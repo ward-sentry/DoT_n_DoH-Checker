@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -58,21 +59,29 @@ type Config struct {
 	Timeout time.Duration
 	Top     int
 	Only    string
+	Pause   bool
 	Version bool
 }
 
 func main() {
 	cfg := parseFlags()
+	defer pauseBeforeExit(cfg)
 	if cfg.Version {
 		fmt.Printf("dotndoh-checker %s\n", appVersion)
 		return
 	}
 
 	dotTargets, err := loadDoT(cfg.DoTFile)
-	exitOnErr("load DoT targets", err)
+	if err != nil {
+		printErr("load DoT targets", err)
+		return
+	}
 
 	dohTargets, err := loadDoH(cfg.DoHFile)
-	exitOnErr("load DoH targets", err)
+	if err != nil {
+		printErr("load DoH targets", err)
+		return
+	}
 
 	fmt.Printf("\nDoT / DoH Checker\n")
 	fmt.Printf("Domain: %s | Attempts: %d | Timeout: %s | Top: %d\n\n", cfg.Domain, cfg.Count, cfg.Timeout, cfg.Top)
@@ -92,7 +101,7 @@ func main() {
 }
 
 func parseFlags() Config {
-	cfg := Config{}
+	cfg := Config{Pause: runtime.GOOS == "windows"}
 	flag.StringVar(&cfg.DoTFile, "dot", "DoT.txt", "path to DoT target list")
 	flag.StringVar(&cfg.DoHFile, "doh", "DoH.txt", "path to DoH target list")
 	flag.StringVar(&cfg.Domain, "domain", "example.com", "domain to resolve during checks")
@@ -100,6 +109,7 @@ func parseFlags() Config {
 	flag.DurationVar(&cfg.Timeout, "timeout", 3500*time.Millisecond, "timeout per attempt")
 	flag.IntVar(&cfg.Top, "top", 4, "number of best resolvers to print")
 	flag.StringVar(&cfg.Only, "only", "", "limit to dot or doh")
+	flag.BoolVar(&cfg.Pause, "pause", cfg.Pause, "wait for Enter before exit")
 	flag.BoolVar(&cfg.Version, "version", false, "print version and exit")
 	flag.Parse()
 
@@ -111,7 +121,8 @@ func parseFlags() Config {
 		cfg.Top = 1
 	}
 	if cfg.Only != "" && cfg.Only != "dot" && cfg.Only != "doh" {
-		exitOnErr("parse flags", fmt.Errorf("-only must be dot or doh"))
+		fmt.Fprintln(os.Stderr, "parse flags: -only must be dot or doh")
+		os.Exit(2)
 	}
 	return cfg
 }
@@ -420,7 +431,7 @@ func resultsByProtocol(results []Result, protocol string) []Result {
 func printProgress(result Result) {
 	status := "FAIL"
 	if result.OK > 0 {
-		status = fmt.Sprintf("%s median=%s ok=%d fail=%d", green("OK"), ms(result.Median), result.OK, result.Fail)
+		status = fmt.Sprintf("OK median=%s ok=%d fail=%d", ms(result.Median), result.OK, result.Fail)
 	}
 	fmt.Printf("  %-3s %-24s %s\n", result.Protocol, result.Name, status)
 }
@@ -455,14 +466,14 @@ func compactErr(err error) string {
 	return text
 }
 
-func green(text string) string {
-	return "\033[32m" + text + "\033[0m"
+func printErr(action string, err error) {
+	fmt.Fprintf(os.Stderr, "%s: %v\n", action, err)
 }
 
-func exitOnErr(action string, err error) {
-	if err == nil {
+func pauseBeforeExit(cfg Config) {
+	if !cfg.Pause {
 		return
 	}
-	fmt.Fprintf(os.Stderr, "%s: %v\n", action, err)
-	os.Exit(1)
+	fmt.Print("\nPress Enter to exit...")
+	_, _ = bufio.NewReader(os.Stdin).ReadString('\n')
 }

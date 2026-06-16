@@ -18,15 +18,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and publish release
-    runs-on: windows-latest
-
+  prepare:
+    name: Read version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      exists: ${{ steps.version.outputs.exists }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]; then
+            echo "VERSION must look like 1.2.3, got '$version'" >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          git fetch --tags --force
+          exists="false"
+          if [[ -n "$(git tag --list "$tag")" ]]; then
+            exists="true"
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build packages
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -34,66 +68,83 @@ jobs:
           go-version: "1.22.x"
           cache: false
 
-      - name: Read version
-        id: version
+      - name: Build Windows and Linux packages
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $version = (Get-Content VERSION -Raw).Trim()
-          if (-not ($version -match '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')) {
-            throw "VERSION must look like 1.2.3, got '$version'"
+          $version = "${{ needs.prepare.outputs.version }}"
+          $tag = "${{ needs.prepare.outputs.tag }}"
+          New-Item -ItemType Directory -Force "dist" | Out-Null
+
+          $targets = @(
+            @{ GOOS = "windows"; GOARCH = "amd64"; Binary = "dotndoh-checker.exe" },
+            @{ GOOS = "linux"; GOARCH = "amd64"; Binary = "dotndoh-checker" }
+          )
+
+          foreach ($target in $targets) {
+            $packageName = "dotndoh-checker-$tag-$($target.GOOS)-$($target.GOARCH)"
+            $packageDir = Join-Path "dist" $packageName
+            New-Item -ItemType Directory -Force $packageDir | Out-Null
+
+            $env:GOOS = $target.GOOS
+            $env:GOARCH = $target.GOARCH
+            $env:CGO_ENABLED = "0"
+            go build -trimpath -ldflags="-s -w -X main.appVersion=$version" -o (Join-Path $packageDir $target.Binary) .
+
+            Copy-Item "DoT.txt","DoH.txt","README.md","LICENSE","VERSION" $packageDir
+            Compress-Archive -Path "$packageDir/*" -DestinationPath "dist/$packageName.zip" -Force
           }
 
-          $tag = "v$version"
-          git fetch --tags --force
-          $exists = [bool](git tag --list $tag)
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-packages
+          path: dist/*.zip
+          if-no-files-found: error
 
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "archive=dotndoh-checker-$tag-windows-amd64.zip" >> $env:GITHUB_OUTPUT
+  release:
+    name: Publish release
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.exists == 'false'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Stop if release tag already exists
-        if: steps.version.outputs.exists == 'true'
-        shell: pwsh
-        run: |
-          Write-Host "Tag ${{ steps.version.outputs.tag }} already exists. Bump VERSION to create a new release."
-
-      - name: Build package
-        if: steps.version.outputs.exists == 'false'
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $version = "${{ steps.version.outputs.version }}"
-          $tag = "${{ steps.version.outputs.tag }}"
-          $packageName = "dotndoh-checker-$tag-windows-amd64"
-          $packageDir = Join-Path "dist" $packageName
-
-          New-Item -ItemType Directory -Force $packageDir | Out-Null
-          go build -trimpath -ldflags="-s -w -X main.appVersion=$version" -o "$packageDir/dotndoh-checker.exe" .
-          Copy-Item "DoT.txt","DoH.txt","README.md","LICENSE","VERSION" $packageDir
-
-          $archivePath = Join-Path "dist" "${{ steps.version.outputs.archive }}"
-          Compress-Archive -Path "$packageDir/*" -DestinationPath $archivePath -Force
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          name: release-packages
+          path: dist
 
       - name: Create tag
-        if: steps.version.outputs.exists == 'false'
-        shell: pwsh
+        shell: bash
         run: |
-          $ErrorActionPreference = "Stop"
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+          git tag -a "${{ needs.prepare.outputs.tag }}" -m "Release ${{ needs.prepare.outputs.tag }}"
+          git push origin "${{ needs.prepare.outputs.tag }}"
 
       - name: Create GitHub Release
-        if: steps.version.outputs.exists == 'false'
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          $ErrorActionPreference = "Stop"
-          gh release create "${{ steps.version.outputs.tag }}" `
-            "dist/${{ steps.version.outputs.archive }}" `
-            --title "${{ steps.version.outputs.tag }}" `
-            --notes "Windows amd64 build with bundled DoT.txt and DoH.txt resolver lists."
+          set -euo pipefail
+          gh release create "${{ needs.prepare.outputs.tag }}" dist/*.zip \
+            --title "${{ needs.prepare.outputs.tag }}" \
+            --notes "Windows amd64 and Linux amd64 builds with bundled DoT.txt and DoH.txt resolver lists."
+
+  already_exists:
+    name: Release already exists
+    needs: prepare
+    if: needs.prepare.outputs.exists == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip
+        run: echo "Tag ${{ needs.prepare.outputs.tag }} already exists. Bump VERSION to create a new release."

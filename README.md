@@ -1,22 +1,19 @@
-# DoT n DoH Checker
+﻿# DoT n DoH Checker
 
-Утилита на Go для поиска самых быстрых публичных DNS-over-TLS и
-DNS-over-HTTPS резолверов из вашей текущей сети.
+Утилита на Go для поиска самых быстрых публичных DNS-over-TLS и DNS-over-HTTPS резолверов из вашей текущей сети.
 
-Идея простая: вместо обычного ICMP ping программа делает настоящие DNS-запросы
-через DoT и DoH, замеряет задержку каждого ответа, сортирует результаты и
-показывает лучшие endpoint'ы для настройки в роутере, AdGuard Home, dnsmasq,
-sing-box, Clash, Keenetic, OpenWrt и похожих системах.
+Программа делает настоящие DNS-запросы через DoT и DoH, замеряет задержку каждого ответа, сортирует результаты и показывает лучшие endpoint'ы для настройки в роутере, AdGuard Home, dnsmasq, sing-box, Clash, Keenetic, OpenWrt и похожих системах.
 
 ## Возможности
 
 - Проверяет DoT через TLS на порту `853`.
 - Проверяет DoH через `application/dns-message`.
-- Читает кандидатов из простых файлов `DoT.txt` и `DoH.txt`.
+- Читает кандидатов из `DoT.txt` и `DoH.txt`.
 - Показывает `median`, `average`, `min`, `max` и количество успешных запросов.
 - Сортирует сначала по успешности, затем по медианной задержке.
 - По умолчанию выводит топ-4 DoT и топ-4 DoH.
-- В комплекте уже есть по 50 бесплатных публичных DoT и DoH endpoint'ов.
+- В комплекте есть по 50 бесплатных публичных DoT и DoH endpoint'ов.
+- На Windows по умолчанию ждет Enter перед закрытием, чтобы окно не исчезало после запуска двойным кликом.
 
 ## Быстрый старт
 
@@ -26,25 +23,27 @@ sing-box, Clash, Keenetic, OpenWrt и похожих системах.
 go run .
 ```
 
-Пример:
+Примеры:
 
 ```powershell
 go run . -count 10 -top 4 -domain google.com
-```
-
-Только DoT:
-
-```powershell
 go run . -only dot
-```
-
-Только DoH:
-
-```powershell
 go run . -only doh
 ```
 
-## Сборка и архив
+На Windows пауза в конце включена по умолчанию. Если запускаете из уже открытого терминала и пауза не нужна:
+
+```powershell
+go run . -pause=false
+```
+
+В бинаре работает так же:
+
+```powershell
+.\dotndoh-checker.exe -pause=false
+```
+
+## Сборка и архив локально
 
 Если установлен `make`, соберите готовый пакет одной командой:
 
@@ -52,18 +51,19 @@ go run . -only doh
 make build
 ```
 
-Команда создаст:
+Команда создает локальный Windows-пакет:
 
 ```text
 dist/
   dotndoh-checker.exe
-  dotndoh-checker/
+  dotndoh-checker-v1.0.0-windows-amd64/
     dotndoh-checker.exe
     DoT.txt
     DoH.txt
     README.md
     LICENSE
-  dotndoh-checker-windows.zip
+    VERSION
+  dotndoh-checker-v1.0.0-windows-amd64.zip
 ```
 
 Полезные цели:
@@ -78,11 +78,10 @@ make clean    # удалить dist/
 Без `make` можно собрать напрямую:
 
 ```powershell
-go build -trimpath -ldflags="-s -w" -o dist/dotndoh-checker.exe .
+go build -trimpath -ldflags="-s -w -X main.appVersion=1.0.0" -o dist/dotndoh-checker.exe .
 ```
 
-Версия берется из файла `VERSION`. При сборке через `make build` она также
-попадает в имя архива и внутрь бинаря:
+Проверить версию:
 
 ```powershell
 .\dist\dotndoh-checker.exe -version
@@ -90,20 +89,27 @@ go build -trimpath -ldflags="-s -w" -o dist/dotndoh-checker.exe .
 
 ## CI и релизы
 
-В проекте есть GitHub Actions workflow:
+GitHub Actions workflow находится здесь:
 
 ```text
 .github/workflows/release.yml
 ```
 
-На каждый push в `main` или `master` workflow:
+На push в `main` или `master` workflow:
 
 1. Читает версию из `VERSION`.
 2. Формирует тег `v{version}`, например `v1.0.0`.
 3. Если такой тег уже существует, пропускает релиз.
-4. Если тега еще нет, собирает Windows `amd64` бинарь.
-5. Упаковывает в zip бинарь, `DoT.txt`, `DoH.txt`, `README.md`, `LICENSE` и `VERSION`.
-6. Создает git tag и GitHub Release с архивом.
+4. Если тега еще нет, собирает два пакета: `windows-amd64` и `linux-amd64`.
+5. В каждый zip кладет бинарь, `DoT.txt`, `DoH.txt`, `README.md`, `LICENSE` и `VERSION`.
+6. Создает git tag и GitHub Release с двумя архивами.
+
+Пример артефактов релиза:
+
+```text
+dotndoh-checker-v1.0.0-windows-amd64.zip
+dotndoh-checker-v1.0.0-linux-amd64.zip
+```
 
 Чтобы выпустить новую версию, измените `VERSION`, например:
 
@@ -115,20 +121,20 @@ go build -trimpath -ldflags="-s -w" -o dist/dotndoh-checker.exe .
 
 ## Запуск бинаря
 
-После сборки:
+Windows:
 
 ```powershell
-.\dist\dotndoh-checker.exe
+.\dotndoh-checker.exe
 ```
 
-Или из распакованного архива:
+Linux:
 
-```powershell
-.\dotndoh-checker.exe -count 10 -top 4
+```bash
+chmod +x ./dotndoh-checker
+./dotndoh-checker
 ```
 
-Важно: `DoT.txt` и `DoH.txt` должны лежать в текущей папке запуска, если вы не
-передали свои пути через параметры.
+Важно: `DoT.txt` и `DoH.txt` должны лежать в текущей папке запуска, если вы не передали свои пути через параметры.
 
 ## Параметры
 
@@ -153,6 +159,12 @@ go build -trimpath -ldflags="-s -w" -o dist/dotndoh-checker.exe .
 
 -only string
     проверить только dot или только doh
+
+-pause bool
+    ждать Enter перед выходом; на Windows по умолчанию true, на Linux false
+
+-version
+    показать версию и выйти
 ```
 
 ## Формат списков
@@ -170,9 +182,7 @@ Cloudflare-1 cloudflare-dns.com 1.1.1.1
 Mullvad-Base base.dns.mullvad.net
 ```
 
-Если `ip` указан, программа подключается к этому IP на порт `853`, но TLS/SNI
-проверяет по `host`. Если `ip` не указан, программа сама резолвит `host` и
-подключается к `host:853`.
+Если `ip` указан, программа подключается к этому IP на порт `853`, но TLS/SNI проверяет по `host`. Если `ip` не указан, программа сама резолвит `host` и подключается к `host:853`.
 
 `DoH.txt`:
 
@@ -198,13 +208,8 @@ Google https://dns.google/dns-query
 3. Потом на `Max`, чтобы отсеять резолверы с редкими, но сильными задержками.
 4. Для роутера удобно выбрать 2-4 endpoint'а одного протокола.
 
-Если DoH заметно быстрее DoT, это нормально: маршрут, CDN и TLS/HTTP стек у
-провайдера могут отличаться. Выбирайте тот протокол, который лучше поддерживает
-ваш роутер.
+Если DoH заметно быстрее DoT, это нормально: маршрут, CDN и TLS/HTTP стек у провайдера могут отличаться. Выбирайте тот протокол, который лучше поддерживает ваш роутер.
 
 ## Примечания
 
-Списки включают публичные бесплатные endpoint'ы с разными политиками: обычные,
-security, family, ad blocking, unfiltered и другие. Перед постоянным
-использованием проверьте, подходит ли конкретный профиль фильтрации под вашу
-сеть.
+Списки включают публичные бесплатные endpoint'ы с разными политиками: обычные, security, family, ad blocking, unfiltered и другие. Перед постоянным использованием проверьте, подходит ли конкретный профиль фильтрации под вашу сеть.
