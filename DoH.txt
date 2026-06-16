@@ -1,0 +1,56 @@
+# Format:
+# name url
+#
+# The checker uses GET with application/dns-message and ?dns=base64url_query.
+# Lines starting with # are ignored.
+
+Cloudflare https://cloudflare-dns.com/dns-query
+Cloudflare-OneOneOneOne https://one.one.one.one/dns-query
+Cloudflare-Security https://security.cloudflare-dns.com/dns-query
+Cloudflare-Family https://family.cloudflare-dns.com/dns-query
+Google https://dns.google/dns-query
+Quad9-Secure https://dns.quad9.net/dns-query
+Quad9-ECS https://dns11.quad9.net/dns-query
+Quad9-Unsecured https://dns10.quad9.net/dns-query
+AdGuard-Default https://dns.adguard-dns.com/dns-query
+AdGuard-Unfiltered https://unfiltered.adguard-dns.com/dns-query
+AdGuard-Family https://family.adguard-dns.com/dns-query
+CleanBrowsing-Security https://doh.cleanbrowsing.org/doh/security-filter/
+CleanBrowsing-Family https://doh.cleanbrowsing.org/doh/family-filter/
+CleanBrowsing-Adult https://doh.cleanbrowsing.org/doh/adult-filter/
+ControlD-Unfiltered https://freedns.controld.com/p0
+ControlD-Malware https://freedns.controld.com/p1
+ControlD-AdsTracking https://freedns.controld.com/p2
+ControlD-Social https://freedns.controld.com/p3
+ControlD-Family https://freedns.controld.com/family
+ControlD-Uncensored https://freedns.controld.com/uncensored
+ControlD-OISD https://freedns.controld.com/x-oisd
+ControlD-OISD-Basic https://freedns.controld.com/x-oisd-basic
+ControlD-StevenBlack https://freedns.controld.com/x-stevenblack
+ControlD-Hagezi-Light https://freedns.controld.com/x-hagezi-light
+ControlD-Hagezi-Normal https://freedns.controld.com/x-hagezi-normal
+ControlD-Hagezi-Pro https://freedns.controld.com/x-hagezi-pro
+ControlD-AdGuard https://freedns.controld.com/x-adguard
+Mullvad-Base https://base.dns.mullvad.net/dns-query
+Mullvad-AdBlock https://adblock.dns.mullvad.net/dns-query
+Mullvad-Extended https://extended.dns.mullvad.net/dns-query
+Mullvad-Family https://family.dns.mullvad.net/dns-query
+Mullvad-All https://all.dns.mullvad.net/dns-query
+DNS0-Default https://dns0.eu/dns-query
+DNS0-Zero https://zero.dns0.eu/dns-query
+DNS0-Kids https://kids.dns0.eu/dns-query
+DNS4EU-Protective https://protective.joindns4.eu/dns-query
+DNS4EU-Child https://child.joindns4.eu/dns-query
+DNS4EU-NoAds https://noads.joindns4.eu/dns-query
+DNS4EU-ChildNoAds https://child-noads.joindns4.eu/dns-query
+DNS4EU-Unfiltered https://unfiltered.joindns4.eu/dns-query
+CIRA-Private https://private.canadianshield.cira.ca/dns-query
+CIRA-Protected https://protected.canadianshield.cira.ca/dns-query
+CIRA-Family https://family.canadianshield.cira.ca/dns-query
+OpenDNS https://doh.opendns.com/dns-query
+OpenDNS-FamilyShield https://doh.familyshield.opendns.com/dns-query
+AliDNS https://dns.alidns.com/dns-query
+Wikimedia https://wikimedia-dns.org/dns-query
+LibreDNS https://doh.libredns.gr/dns-query
+DNS-SB https://doh.dns.sb/dns-query
+CZ-NIC-ODVR https://odvr.nic.cz/dns-query

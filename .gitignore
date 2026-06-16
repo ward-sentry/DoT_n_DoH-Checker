@@ -17,6 +17,9 @@ coverage.*
 *.coverprofile
 profile.cov
 
+# Build artifacts
+dist/
+
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
@@ -28,5 +31,5 @@ go.work.sum
 .env
 
 # Editor/IDE
-# .idea/
+.idea
 # .vscode/

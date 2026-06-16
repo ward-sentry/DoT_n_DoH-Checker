@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content VERSION -Raw).Trim()
+          if (-not ($version -match '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')) {
+            throw "VERSION must look like 1.2.3, got '$version'"
+          }
+
+          $tag = "v$version"
+          git fetch --tags --force
+          $exists = $false
+          git rev-parse -q --verify "refs/tags/$tag" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            $exists = $true
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "archive=dotndoh-checker-$tag-windows-amd64.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Stop if release tag already exists
+        if: steps.version.outputs.exists == 'true'
+        shell: pwsh
+        run: |
+          Write-Host "Tag ${{ steps.version.outputs.tag }} already exists. Bump VERSION to create a new release."
+
+      - name: Build package
+        if: steps.version.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "${{ steps.version.outputs.version }}"
+          $tag = "${{ steps.version.outputs.tag }}"
+          $packageName = "dotndoh-checker-$tag-windows-amd64"
+          $packageDir = Join-Path "dist" $packageName
+
+          New-Item -ItemType Directory -Force $packageDir | Out-Null
+          go build -trimpath -ldflags="-s -w -X main.appVersion=$version" -o "$packageDir/dotndoh-checker.exe" .
+          Copy-Item "DoT.txt","DoH.txt","README.md","LICENSE","VERSION" $packageDir
+
+          $archivePath = Join-Path "dist" "${{ steps.version.outputs.archive }}"
+          Compress-Archive -Path "$packageDir/*" -DestinationPath $archivePath -Force
+
+      - name: Create tag
+        if: steps.version.outputs.exists == 'false'
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.exists == 'false'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" `
+            "dist/${{ steps.version.outputs.archive }}" `
+            --title "${{ steps.version.outputs.tag }}" `
+            --notes "Windows amd64 build with bundled DoT.txt and DoH.txt resolver lists."
