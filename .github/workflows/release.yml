@@ -7,6 +7,9 @@ on:
       - master
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 permissions:
   contents: write
 
@@ -29,11 +32,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.22.x"
+          cache: false
 
       - name: Read version
         id: version
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $version = (Get-Content VERSION -Raw).Trim()
           if (-not ($version -match '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$')) {
             throw "VERSION must look like 1.2.3, got '$version'"
@@ -41,11 +46,7 @@ jobs:
 
           $tag = "v$version"
           git fetch --tags --force
-          $exists = $false
-          git rev-parse -q --verify "refs/tags/$tag" *> $null
-          if ($LASTEXITCODE -eq 0) {
-            $exists = $true
-          }
+          $exists = [bool](git tag --list $tag)
 
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
@@ -79,6 +80,7 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
@@ -90,6 +92,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $ErrorActionPreference = "Stop"
           gh release create "${{ steps.version.outputs.tag }}" `
             "dist/${{ steps.version.outputs.archive }}" `
             --title "${{ steps.version.outputs.tag }}" `
